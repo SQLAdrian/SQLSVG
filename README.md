@@ -2,7 +2,24 @@
 
 Render any SVG inside SQL Server Management Studio's Spatial Results tab — pure T-SQL, no CLR, no PowerShell, no external converters. Drop an SVG path into the script, hit F5, look at the spatial tab.
 
-Inspired by [Drawing in SQL Server using SSMS](https://www.sqldba.org/post/drawing-in-sql-server-using-ssms-a-technical-article) — that workflow was Inkscape + MyGeoData + manual WKT paste. This is the same idea, automated, end-to-end inside the database.
+## The bigger picture
+
+The original recipe — written up at [sqldba.org: Drawing in SQL Server using SSMS](https://www.sqldba.org/post/drawing-in-sql-server-using-ssms-a-technical-article) — goes roughly like this:
+
+1. **Take an image** (a photo, a logo, a sketch).
+2. **Vectorise** it in Inkscape — trace the bitmap, turn it into paths.
+3. **Clean up** the SVG: straighten curves, prune fiddly nodes, simplify down to ~10 colour layers.
+4. **Convert** each path's `d` attribute to Well-Known Text using an external tool like MyGeoData, scaling the SVG to ~80–90% first to leave headroom.
+5. **Paste** the resulting WKT into a T-SQL script, one polygon per row, ordered carefully so SSMS's per-row palette lands the colour you want on the layer you want.
+6. **Run** it. SSMS's Spatial Results tab paints each row in its own opaque colour. Overlapping rows mix visually into composite tones — that's how shading is "faked".
+
+That blog post ate roughly 100 hours of an afternoon. Most of those hours weren't spent drawing — they were spent in steps 3, 4 and 5: Inkscape, an external WKT converter, and a lot of copy-paste into SQL.
+
+**SQLSVG bypasses step 4 entirely.** Drop the SVG into a stored procedure call, and it parses the paths, flattens the curves, applies any nested transforms, and hands back one `geometry` row per shape — ready for the spatial tab. No external converter, no paste-as-literal pipeline.
+
+What it does **not** do is replace step 3. Vector prep in Inkscape (or your editor of choice) is still where most of the artistic decisions happen — picking which paths belong together, deciding how many layers you can spend, simplifying intricate curves so the spatial tab can render them. SQLSVG just stops the conversion step from being the bottleneck.
+
+And the colour question still belongs to SSMS. The spatial tab assigns colours by row order, not by anything you say in the data — so colouring is a matter of placing rows in the right sequence and using overlap to mix opaque tones into the shades you actually want. See [`Brent/brent.sql`](Brent/brent.sql) for a worked example of that technique, and [`Colour palette.sql`](Colour%20palette.sql) for the palette-probe scripts.
 
 ## What it does
 
