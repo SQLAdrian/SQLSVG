@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   id="svg8"
+   version="1.1"
+   viewBox="0 0 508.05701 286.04346"
+   height="286.04346mm"
+   width="508.05701mm">
+  <defs
+     id="defs2" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+    <MetaInfo xmlns="http://www.prognoz.ru"><Geo><GeoItem X="-595.30" Y="-142.88" Latitude="37.375593" Longitude="-121.977795"/><GeoItem X="1388.66" Y="622.34" Latitude="37.369930" Longitude="-121.959404"/></Geo></MetaInfo>
+  
+  <g
+     transform="translate(410.51953,15.367351)"
+     id="layer1">
+    <g
+       transform="translate(7.5595241,65.767857)"
+       id="g826">
+      <path
+         id="path844"
+         d="M -418.04166,61.898805 V -81.10849 h 254 254 V 61.898805 204.9061 h -254 -254 z"
+         style="fill:#e6e3da;stroke-width:0.26458335" />
+      
+    </g>
+  </g>
+</svg>
