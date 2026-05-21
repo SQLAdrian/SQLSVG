@@ -12,7 +12,11 @@ CREATE PROCEDURE dbo.SVG_to_Geometry
     --1 = UnionAggregate everything into one row.  Complex SVGs can produce
     --a geometry the SSMS spatial tab refuses to render (too many points), so
     --leave at 0 for those and pick a label column to colour by instead.
-    @single_layer   BIT = 0
+    @single_layer   BIT = 0,
+    --1 = emit ready-to-paste SQL lines instead of geometry rows.  Each row
+    --is one INSERT for a brent.sql-style script: label + WKT literal.
+    --The fill colour follows as a trailing --comment for manual mapping.
+    @emit_script    BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -208,6 +212,34 @@ BEGIN
     INTO #final
     FROM #paths p
     LEFT JOIN wkt_shapes ws ON ws.layer_id = p.layer_id;
+
+    IF @emit_script = 1
+    BEGIN
+        --paste-ready WKT INSERT lines.  Double-up any apostrophe inside the
+        --label so it survives as a SQL string literal.  fill_hex is a
+        --trailing --comment for re-colouring in brent.sql-style scripts.
+        IF @single_layer = 0
+            SELECT layer_id,
+                   N'INSERT INTO @tt(label, gg) VALUES (N'''
+                 + REPLACE(ISNULL(group_label, ISNULL(path_id, CONCAT('layer_', layer_id))), '''', '''''')
+                 + N''', geometry::STGeomFromText('''
+                 + CAST(geom.STAsText() AS NVARCHAR(MAX))
+                 + N''', 0));'
+                 + CASE WHEN fill_hex IS NULL THEN N''
+                        ELSE N'  --fill #' + fill_hex END
+                   AS sql_line
+            FROM #final
+            WHERE geom IS NOT NULL
+            ORDER BY layer_id;
+        ELSE
+            SELECT 1 AS layer_id,
+                   N'INSERT INTO @tt(label, gg) VALUES (N''all'', geometry::STGeomFromText('''
+                 + CAST(geometry::UnionAggregate(geom).STAsText() AS NVARCHAR(MAX))
+                 + N''', 0));' AS sql_line
+            FROM #final
+            WHERE geom IS NOT NULL;
+        RETURN;
+    END
 
     IF @single_layer = 0
         SELECT layer_id, group_label, path_id, fill_hex, geom

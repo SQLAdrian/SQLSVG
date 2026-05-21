@@ -690,12 +690,14 @@ GO
 
 /*main script.  edit @svg_path, run, check the spatial results tab.*/
 
-DECLARE @svg_path NVARCHAR(400) = N'C:\GitHub\SVGme\logo_jupyterhub.svg';
+DECLARE @svg_path NVARCHAR(400) = N'C:\Github\SQLSVG\Test\Simple.svg';
 
 DECLARE @flatten_steps INT = 12;
 --set to 1 to UnionAggregate every path into a single row (one shape, one colour).
 --leave 0 for complex SVGs: a unioned geometry with too many points fails the SSMS spatial tab.
 DECLARE @single_layer  BIT = 0;
+--set to 1 to get paste-ready INSERT lines (label + WKT literal) for a brent.sql-style script.
+DECLARE @emit_script   BIT = 0;
 DECLARE @xml XML;
 
 --OPENROWSET BULK needs a literal path; build it with dynamic SQL.
@@ -942,7 +944,32 @@ INTO #final
 FROM #paths p
 LEFT JOIN wkt_shapes ws ON ws.layer_id = p.layer_id;
 
-IF @single_layer = 0
+IF @emit_script = 1
+BEGIN
+    --paste-ready WKT INSERT lines.  Apostrophes in the label are doubled
+    --so the string survives.  Fill colour trails as a --comment.
+    IF @single_layer = 0
+        SELECT layer_id,
+               N'INSERT INTO @tt(label, gg) VALUES (N'''
+             + REPLACE(ISNULL(group_label, ISNULL(path_id, CONCAT('layer_', layer_id))), '''', '''''')
+             + N''', geometry::STGeomFromText('''
+             + CAST(geom.STAsText() AS NVARCHAR(MAX))
+             + N''', 0));'
+             + CASE WHEN fill_hex IS NULL THEN N''
+                    ELSE N'  --fill #' + fill_hex END
+               AS sql_line
+        FROM #final
+        WHERE geom IS NOT NULL
+        ORDER BY layer_id;
+    ELSE
+        SELECT 1 AS layer_id,
+               N'INSERT INTO @tt(label, gg) VALUES (N''all'', geometry::STGeomFromText('''
+             + CAST(geometry::UnionAggregate(geom).STAsText() AS NVARCHAR(MAX))
+             + N''', 0));' AS sql_line
+        FROM #final
+        WHERE geom IS NOT NULL;
+END
+ELSE IF @single_layer = 0
     SELECT layer_id, group_label, path_id, fill_hex, geom
     FROM #final ORDER BY layer_id;
 ELSE
