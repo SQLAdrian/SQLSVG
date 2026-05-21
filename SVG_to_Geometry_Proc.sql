@@ -20,7 +20,11 @@ CREATE PROCEDURE dbo.SVG_to_Geometry
     --1 = quantise fill_hex against the SSMS palette via fn_NearestSsmsRecipe
     --and add recipe_kind / recipe_row1 / recipe_row2 / recipe_hex / recipe_dist
     --columns to the output.  Requires Palette_Lookup.sql to be installed.
-    @quantise       BIT = 0
+    @quantise       BIT = 0,
+    --decimal places kept in the WKT.  Default 4: ample for visual rendering
+    --without the 16-digit FLOAT noise that geometry::STAsText otherwise emits.
+    --Bump higher for very small SVGs where sub-unit precision matters.
+    @coord_decimals INT = 4
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -181,19 +185,19 @@ BEGIN
     rings AS (
         SELECT layer_id, subpath_id,
             STRING_AGG(
-                CAST(CAST(CAST(x AS DECIMAL(18,6)) AS VARCHAR(32)) + ' ' +
-                     CAST(CAST(y AS DECIMAL(18,6)) AS VARCHAR(32))
+                CAST(LTRIM(STR(x, 24, @coord_decimals)) + ' ' +
+                     LTRIM(STR(y, 24, @coord_decimals))
                      AS VARCHAR(MAX)),
                 ','
             ) WITHIN GROUP (ORDER BY point_order) AS ring_coords,
             COUNT(DISTINCT
-                CAST(CAST(x AS DECIMAL(18,6)) AS VARCHAR(32)) + ',' +
-                CAST(CAST(y AS DECIMAL(18,6)) AS VARCHAR(32))) AS distinct_pts
+                LTRIM(STR(x, 24, @coord_decimals)) + ',' +
+                LTRIM(STR(y, 24, @coord_decimals))) AS distinct_pts
         FROM all_pts
         GROUP BY layer_id, subpath_id
         HAVING COUNT(DISTINCT
-            CAST(CAST(x AS DECIMAL(18,6)) AS VARCHAR(32)) + ',' +
-            CAST(CAST(y AS DECIMAL(18,6)) AS VARCHAR(32))) >= 3
+            LTRIM(STR(x, 24, @coord_decimals)) + ',' +
+            LTRIM(STR(y, 24, @coord_decimals))) >= 3
     ),
     wkt_shapes AS (
         SELECT layer_id,
@@ -207,11 +211,15 @@ BEGIN
     )
 
     --materialise per-path geometries so IF/ELSE can branch on the output shape.
+    --ws.wkt is kept alongside `geom` so @emit_script can use the already-rounded
+    --WKT directly instead of round-tripping through geom.STAsText() (which
+    --re-emits FLOAT noise at ~16 digits).
     SELECT
         p.layer_id,
         p.group_label,
         p.path_id,
         p.fill_hex,
+        ws.wkt AS wkt,
         geometry::STGeomFromText(ws.wkt, 0).MakeValid() AS geom
     INTO #final
     FROM #paths p
@@ -228,20 +236,20 @@ BEGIN
                    N'INSERT INTO @tt(label, gg) VALUES (N'''
                  + REPLACE(ISNULL(path_id, ISNULL(path_id, CONCAT('layer_', path_id))), '''', '''''')
                  + N''', geometry::STGeomFromText('''
-                 + CAST(geom.STAsText() AS NVARCHAR(MAX))
+                 + CAST(wkt AS NVARCHAR(MAX))
                  + N''', 0));'
                  + CASE WHEN fill_hex IS NULL THEN N''
                         ELSE N'  --fill #' + fill_hex END
                    AS sql_line
             FROM #final
-            WHERE geom IS NOT NULL
+            WHERE wkt IS NOT NULL
             ORDER BY layer_id;
         ELSE IF @single_layer = 0 AND @quantise = 1
             SELECT f.layer_id,
                    N'INSERT INTO @tt(label, gg) VALUES (N'''
                  + REPLACE(ISNULL(f.group_label, ISNULL(f.path_id, CONCAT('layer_', f.layer_id))), '''', '''''')
                  + N''', geometry::STGeomFromText('''
-                 + CAST(f.geom.STAsText() AS NVARCHAR(MAX))
+                 + CAST(f.wkt AS NVARCHAR(MAX))
                  + N''', 0));'
                  + CASE WHEN f.fill_hex IS NULL THEN N''
                         ELSE N'  --fill #' + f.fill_hex
@@ -256,10 +264,10 @@ BEGIN
                    AS sql_line
             FROM #final f
             OUTER APPLY dbo.fn_NearestSsmsRecipe(f.fill_hex) rec
-            WHERE f.geom IS NOT NULL
+            WHERE f.wkt IS NOT NULL
             ORDER BY f.layer_id;
         ELSE
-            --single-layer (Union) ignores @quantise.
+            --single-layer (Union) ignores @quantise and @coord_decimals (uses STAsText on the unioned geom).
             SELECT 1 AS layer_id,
                    N'INSERT INTO @tt(label, gg) VALUES (N''all'', geometry::STGeomFromText('''
                  + CAST(geometry::UnionAggregate(geom).STAsText() AS NVARCHAR(MAX))
