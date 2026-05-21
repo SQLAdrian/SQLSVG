@@ -226,7 +226,7 @@ BEGIN
         IF @single_layer = 0 AND @quantise = 0
             SELECT layer_id,
                    N'INSERT INTO @tt(label, gg) VALUES (N'''
-                 + REPLACE(ISNULL(group_label, ISNULL(path_id, CONCAT('layer_', layer_id))), '''', '''''')
+                 + REPLACE(ISNULL(path_id, ISNULL(path_id, CONCAT('layer_', path_id))), '''', '''''')
                  + N''', geometry::STGeomFromText('''
                  + CAST(geom.STAsText() AS NVARCHAR(MAX))
                  + N''', 0));'
