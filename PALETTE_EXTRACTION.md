@@ -32,6 +32,10 @@ The fastest way:
 
 The bottom-left cell of the singleton grid is the one *immediately above* the overlap strip, leftmost column. The top-right is the cell at the far top-right corner of the grid.
 
+**My Values from image**
+61, 1463
+1489, 36
+1508
 ## 4. Run the extractor
 
 Open PowerShell in the repo root:
@@ -40,9 +44,9 @@ Open PowerShell in the repo root:
 .\extract-palette.ps1 `
     -Image .\palette4.png `
     -GridSize 32 `
-    -X0 60 -Y0 980 `
-    -X1 980 -Y1 60 `
-    -OverlapY 1030 `
+    -X0 61 -Y0 1463 `
+    -X1 1489 -Y1 36 `
+    -OverlapY 1508 `
     -OutCsv .\palette-extract.csv
 ```
 
