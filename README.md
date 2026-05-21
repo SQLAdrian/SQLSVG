@@ -27,9 +27,10 @@ Parses the SVG `<path>` `d` attribute (all 20 commands: `M m L l H h V v C c S s
 
 ## Quick start
 
-1. Run [`SVG_to_Geometry.sql`](SVG_to_Geometry.sql) — installs three TVFs (`fn_TokenizeSvgPath`, `fn_ParseSvgPath`, `fn_ParseSvgTransform`) and runs the example.
+1. Run [`SVG_to_Geometry.sql`](SVG_to_Geometry.sql) — installs three TVFs (`fn_TokenizeSvgPath`, `fn_ParseSvgPath`, `fn_ParseSvgTransform`).
 2. Run [`SVG_to_Geometry_Proc.sql`](SVG_to_Geometry_Proc.sql) — installs the wrapper procedure.
-3. Try a sample:
+3. (Optional) Run [`Palette_Lookup.sql`](Palette_Lookup.sql) — installs `dbo.SsmsPaletteRecipe` plus `fn_SsmsPaletteColour` and `fn_NearestSsmsRecipe`. Needed only if you use `@quantise = 1`.
+4. Try a sample:
 
 ```sql
 EXEC dbo.SVG_to_Geometry N'C:\Github\SQLSVG\Test\Simple.svg';
@@ -45,6 +46,7 @@ Click the **Spatial results** tab in SSMS.
 | `@flatten_steps` | `12` | Line segments per Bézier / arc. Higher = smoother + more points. |
 | `@single_layer` | `0` | `1` = `UnionAggregate` everything into one row (one shape, one colour). Complex SVGs can produce a geometry the spatial tab refuses to render — leave at `0` for those. |
 | `@emit_script` | `0` | `1` = emit ready-to-paste `INSERT INTO @tt(label, gg) VALUES (..., geometry::STGeomFromText('...', 0));` lines instead of geometry rows. Useful for stashing parsed geometry into a [brent.sql](Brent/brent.sql)-style script. |
+| `@quantise` | `0` | `1` = look up each `fill_hex` against [`Palette_Lookup.sql`](Palette_Lookup.sql) and add `recipe_*` columns (or recipe info in the `@emit_script` comment) telling you which SSMS row index(es) reproduce that colour closest. Requires `Palette_Lookup.sql` to be installed. |
 
 ## Output columns
 
@@ -55,6 +57,20 @@ Click the **Spatial results** tab in SSMS.
 | `path_id` | `<path id="...">` value. |
 | `fill_hex` | Resolved from inline `style="fill:..."`, then `fill="..."`, then CSS class. NULL if inherited from an ancestor `<g>`. |
 | `geom` | `geometry` (SRID 0). Y is negated so the picture renders upright in SSMS. |
+| `recipe_kind` *(quantise only)* | `singleton` (one row idx) or `overlap_pair` (two row idxs stacked at the same position). |
+| `recipe_row1` *(quantise only)* | Row index to position the polygon at — bottom of stack if `overlap_pair`. |
+| `recipe_row2` *(quantise only)* | Top row index if `overlap_pair`, else NULL. |
+| `recipe_hex` *(quantise only)* | The matched palette hex (`#rrggbb`). |
+| `recipe_dist` *(quantise only)* | Euclidean RGB distance from `fill_hex` to `recipe_hex`. ~5 means a near-perfect match; tens or hundreds mean the SSMS pastel gamut couldn't reach the target. |
+
+## Palette lookup
+
+[`Palette_Lookup.sql`](Palette_Lookup.sql) ships 4096 singleton + 64 overlap-pair samples from the SSMS Spatial Results palette, captured from `palette4.png` via [`extract-palette.ps1`](extract-palette.ps1). See [`PALETTE_EXTRACTION.md`](PALETTE_EXTRACTION.md) for how to re-sample. Two helpers:
+
+```sql
+SELECT dbo.fn_SsmsPaletteColour(137);              --row idx -> '#rrggbb'
+SELECT * FROM dbo.fn_NearestSsmsRecipe('#FF8080'); --target  -> nearest recipe
+```
 
 ## Samples
 

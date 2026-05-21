@@ -16,7 +16,11 @@ CREATE PROCEDURE dbo.SVG_to_Geometry
     --1 = emit ready-to-paste SQL lines instead of geometry rows.  Each row
     --is one INSERT for a brent.sql-style script: label + WKT literal.
     --The fill colour follows as a trailing --comment for manual mapping.
-    @emit_script    BIT = 0
+    @emit_script    BIT = 0,
+    --1 = quantise fill_hex against the SSMS palette via fn_NearestSsmsRecipe
+    --and add recipe_kind / recipe_row1 / recipe_row2 / recipe_hex / recipe_dist
+    --columns to the output.  Requires Palette_Lookup.sql to be installed.
+    @quantise       BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -217,8 +221,9 @@ BEGIN
     BEGIN
         --paste-ready WKT INSERT lines.  Double-up any apostrophe inside the
         --label so it survives as a SQL string literal.  fill_hex is a
-        --trailing --comment for re-colouring in brent.sql-style scripts.
-        IF @single_layer = 0
+        --trailing --comment; when @quantise = 1 the comment also names the
+        --nearest SSMS palette recipe.
+        IF @single_layer = 0 AND @quantise = 0
             SELECT layer_id,
                    N'INSERT INTO @tt(label, gg) VALUES (N'''
                  + REPLACE(ISNULL(group_label, ISNULL(path_id, CONCAT('layer_', layer_id))), '''', '''''')
@@ -231,7 +236,30 @@ BEGIN
             FROM #final
             WHERE geom IS NOT NULL
             ORDER BY layer_id;
+        ELSE IF @single_layer = 0 AND @quantise = 1
+            SELECT f.layer_id,
+                   N'INSERT INTO @tt(label, gg) VALUES (N'''
+                 + REPLACE(ISNULL(f.group_label, ISNULL(f.path_id, CONCAT('layer_', f.layer_id))), '''', '''''')
+                 + N''', geometry::STGeomFromText('''
+                 + CAST(f.geom.STAsText() AS NVARCHAR(MAX))
+                 + N''', 0));'
+                 + CASE WHEN f.fill_hex IS NULL THEN N''
+                        ELSE N'  --fill #' + f.fill_hex
+                           + CASE WHEN rec.kind IS NULL THEN N''
+                                  WHEN rec.kind = 'singleton'
+                                       THEN N'  recipe row '   + CAST(rec.row_idx_1 AS NVARCHAR(10))
+                                            + N' (' + rec.hex + N')'
+                                  ELSE      N'  recipe rows ' + CAST(rec.row_idx_1 AS NVARCHAR(10))
+                                            + N'+' + CAST(rec.row_idx_2 AS NVARCHAR(10))
+                                            + N' (' + rec.hex + N')'
+                             END END
+                   AS sql_line
+            FROM #final f
+            OUTER APPLY dbo.fn_NearestSsmsRecipe(f.fill_hex) rec
+            WHERE f.geom IS NOT NULL
+            ORDER BY f.layer_id;
         ELSE
+            --single-layer (Union) ignores @quantise.
             SELECT 1 AS layer_id,
                    N'INSERT INTO @tt(label, gg) VALUES (N''all'', geometry::STGeomFromText('''
                  + CAST(geometry::UnionAggregate(geom).STAsText() AS NVARCHAR(MAX))
@@ -241,9 +269,20 @@ BEGIN
         RETURN;
     END
 
-    IF @single_layer = 0
+    IF @single_layer = 0 AND @quantise = 0
         SELECT layer_id, group_label, path_id, fill_hex, geom
         FROM #final ORDER BY layer_id;
+    ELSE IF @single_layer = 0 AND @quantise = 1
+        SELECT f.layer_id, f.group_label, f.path_id, f.fill_hex, f.geom,
+               rec.kind         AS recipe_kind,
+               rec.row_idx_1    AS recipe_row1,
+               rec.row_idx_2    AS recipe_row2,
+               rec.hex          AS recipe_hex,
+               CASE WHEN rec.distance_sq IS NULL THEN NULL
+                    ELSE SQRT(rec.distance_sq) END AS recipe_dist
+        FROM #final f
+        OUTER APPLY dbo.fn_NearestSsmsRecipe(f.fill_hex) rec
+        ORDER BY f.layer_id;
     ELSE
         SELECT 1                              AS layer_id,
                CAST(NULL AS VARCHAR(200))     AS group_label,
