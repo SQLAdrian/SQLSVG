@@ -24,7 +24,8 @@
 
 .PARAMETER GridSize
     N, where the singleton grid is NxN.  Must match @grid_size in
-    Colour palette.sql.  Default 32.
+    Colour palette.sql.  If omitted, auto-detected by counting cells
+    at y=Y0 between X0..X1.
 
 .PARAMETER X0
     Pixel x of the centre of the BOTTOM-LEFT singleton cell.
@@ -48,13 +49,20 @@
     Output CSV path.  Default: .\palette-extract.csv
 
 .EXAMPLE
-    .\extract-palette.ps1 -Image .\palette4.png -GridSize 32 `
-        -X0 60 -Y0 980 -X1 980 -Y1 60 -OverlapY 1030 `
+    # Auto-detect grid size from the screenshot:
+    .\extract-palette.ps1 -Image .\palette4.png `
+        -X0 61 -Y0 1463 -X1 1489 -Y1 36 -OverlapY 1508 `
+        -OutCsv .\palette-extract.csv
+
+.EXAMPLE
+    # Force grid size if auto-detect mis-counts (e.g., heavy anti-aliasing):
+    .\extract-palette.ps1 -Image .\palette4.png -GridSize 64 `
+        -X0 61 -Y0 1463 -X1 1489 -Y1 36 -OverlapY 1508 `
         -OutCsv .\palette-extract.csv
 #>
 param(
     [Parameter(Mandatory=$true)] [string]$Image,
-    [int]$GridSize = 32,
+    [int]$GridSize = 0,
     [Parameter(Mandatory=$true)] [int]$X0,
     [Parameter(Mandatory=$true)] [int]$Y0,
     [Parameter(Mandatory=$true)] [int]$X1,
@@ -68,6 +76,24 @@ Add-Type -AssemblyName System.Drawing
 $path = (Resolve-Path -LiteralPath $Image).Path
 $img  = [System.Drawing.Bitmap]::FromFile($path)
 Write-Host ("Image loaded: {0} ({1} x {2})" -f $path, $img.Width, $img.Height)
+
+#auto-detect grid size if not specified: scan a horizontal line between X0..X1
+#at Y=Y0, count transitions from white background into coloured cells.
+if ($GridSize -le 0) {
+    $whiteThresh = 245
+    $count = 0
+    $inCell = $false
+    $xLo = [Math]::Min($X0, $X1); $xHi = [Math]::Max($X0, $X1)
+    for ($x = $xLo; $x -le $xHi; $x++) {
+        $c = $img.GetPixel($x, $Y0)
+        $avg = ($c.R + $c.G + $c.B) / 3
+        if ($avg -lt $whiteThresh -and -not $inCell) { $count++; $inCell = $true }
+        elseif ($avg -ge $whiteThresh) { $inCell = $false }
+    }
+    if ($count -lt 2) { throw "Auto-detect failed: only $count cells found at y=$Y0.  Check calibration." }
+    $GridSize = $count
+    Write-Host ("Auto-detected GridSize = {0} (scanned y={1} between x={2}..{3}).  Pass -GridSize explicitly to override." -f $GridSize, $Y0, $xLo, $xHi)
+}
 
 if ($GridSize -lt 2) { throw "GridSize must be >= 2" }
 $xStep = ($X1 - $X0) / [double]($GridSize - 1)

@@ -43,7 +43,6 @@ Open PowerShell in the repo root:
 ```powershell
 .\extract-palette.ps1 `
     -Image .\palette4.png `
-    -GridSize 32 `
     -X0 61 -Y0 1463 `
     -X1 1489 -Y1 36 `
     -OverlapY 1508 `
@@ -52,7 +51,8 @@ Open PowerShell in the repo root:
 
 Substitute your actual coordinates. The script:
 - Loads the image via `System.Drawing.Bitmap` (no external deps).
-- Linearly interpolates the 1024 cell centres from the two calibration points.
+- **Auto-detects `GridSize`** by scanning a horizontal line between `X0..X1` at `y = Y0` and counting cell transitions.  Pass `-GridSize N` to override if auto-detect mis-counts.
+- Linearly interpolates every cell centre from the two calibration points.
 - Reads the centre RGB of each cell.
 - Outputs CSV.
 
