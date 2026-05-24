@@ -2,6 +2,20 @@
 
 Render any SVG inside SQL Server Management Studio's Spatial Results tab — pure T-SQL, no CLR, no PowerShell, no external converters. Drop an SVG path into the script, hit F5, look at the spatial tab.
 
+## The problem ##
+SSMS's spatial tab is a hidden gem — it can render complex geometry with anti-aliasing, and it assigns each row an opaque colour based on its order, so you can mix shapes into composite tones. But it has no native way to get vector data in there. The original workflow was a manual copy-paste pipeline: SVG → external WKT converter → T-SQL literals → spatial tab.
+
+The issue is getting something drawn in SSMS without having to do the complex extraction and math to render the image.
+
+## Caveat ##
+You'll need to do SVG work, I highly recommend GIMP and Inkscape to flatted images and convert them to SVG objects. 
+A full explenation of how to do this can be found in the Drwaing in SQL server using SSMS link in this readme.
+
+Most of your time will be spent on cleaning images and mapping colours to palette layers, but it's quite a bit of fun.
+
+## Quick win ##
+Use simple images, low colour counts, ideally flat pastel colours, like a comic strip.
+
 ## The bigger picture
 
 The original recipe — written up at [sqldba.org: Drawing in SQL Server using SSMS](https://www.sqldba.org/post/drawing-in-sql-server-using-ssms-a-technical-article) — goes roughly like this:
@@ -13,7 +27,7 @@ The original recipe — written up at [sqldba.org: Drawing in SQL Server using S
 5. **Paste** the resulting WKT into a T-SQL script, one polygon per row, ordered carefully so SSMS's per-row palette lands the colour you want on the layer you want.
 6. **Run** it. SSMS's Spatial Results tab paints each row in its own opaque colour. Overlapping rows mix visually into composite tones — that's how shading is "faked".
 
-That blog post ate roughly 100 hours of an afternoon. Most of those hours weren't spent drawing — they were spent in steps 3, 4 and 5: Inkscape, an external WKT converter, and a lot of copy-paste into SQL.
+That blog post ate roughly 100 hours of afternoons. Most of those hours weren't spent drawing — they were spent in steps 3, 4 and 5: Inkscape, an external WKT converter, and a lot of copy-paste into SQL.
 
 **SQLSVG bypasses step 4 entirely.** Drop the SVG into a stored procedure call, and it parses the paths, flattens the curves, applies any nested transforms, and hands back one `geometry` row per shape — ready for the spatial tab. No external converter, no paste-as-literal pipeline.
 
