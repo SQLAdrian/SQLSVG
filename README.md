@@ -7,7 +7,7 @@ SSMS's spatial tab is a hidden gem — it can render complex geometry with anti-
 
 The issue is getting something drawn in SSMS without having to do the complex extraction and math to render the image.
 
-## Caveat ##
+## Before you start ##
 You'll need to do SVG work, I highly recommend GIMP and Inkscape to flatted images and convert them to SVG objects. 
 A full explenation of how to do this can be found in the Drwaing in SQL server using SSMS link in this readme.
 
@@ -47,7 +47,13 @@ Parses the SVG `<path>` `d` attribute (all 20 commands: `M m L l H h V v C c S s
 4. Try a sample:
 
 ```sql
-EXEC dbo.SVG_to_Geometry N'C:\Github\SQLSVG\Test\Simple.svg';
+EXEC dbo.SVG_to_Geometry N'C:\SQLSVG\Test\Simple.svg';
+
+--OR
+EXEC dbo.SVG_to_Geometry 
+N'C:\SVGme\BobbyTables\Bobbytables.svg'
+, @flatten_steps = 2
+, @emit_script = 1
 ```
 
 Click the **Spatial results** tab in SSMS.
